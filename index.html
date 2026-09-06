@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#07130f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>霓虹贪吃蛇</title>
+  <style>
+    :root { color-scheme: dark; --lime:#8dfc68; --mint:#2ee6a6; --red:#ff5c79; --ink:#06110d; --panel:rgba(14,35,27,.86); }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html,body { margin:0; min-height:100%; overscroll-behavior:none; }
+    body {
+      min-height:100svh; display:grid; place-items:center; overflow:hidden; color:#edfdf5;
+      font-family:ui-rounded,"SF Pro Rounded","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+      background:
+        radial-gradient(circle at 15% 5%,rgba(46,230,166,.22),transparent 35%),
+        radial-gradient(circle at 90% 85%,rgba(141,252,104,.14),transparent 38%),#030b08;
+      padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));
+      touch-action:none; user-select:none;
+    }
+    .app { width:min(94vw,520px); max-height:calc(100svh - 24px); display:grid; gap:10px; }
+    header { display:flex; justify-content:space-between; align-items:end; gap:12px; }
+    h1 { margin:0; font-size:clamp(22px,5vw,32px); line-height:1; letter-spacing:.04em; }
+    .eyebrow { margin:0 0 5px; color:var(--mint); font-size:11px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; }
+    .score-card { min-width:94px; text-align:right; }
+    .score-card span { display:block; color:#91aa9d; font-size:10px; letter-spacing:.15em; }
+    #score { color:var(--lime); font-size:30px; font-weight:900; line-height:1; font-variant-numeric:tabular-nums; }
+    .board-wrap { position:relative; padding:8px; border:1px solid rgba(141,252,104,.22); border-radius:22px; background:var(--panel); box-shadow:0 18px 70px rgba(0,0,0,.45),inset 0 0 24px rgba(46,230,166,.04); }
+    canvas { width:100%; aspect-ratio:1; display:block; border-radius:15px; background:#06120e; touch-action:none; }
+    .overlay { position:absolute; inset:8px; display:grid; place-items:center; border-radius:15px; background:rgba(2,10,7,.66); backdrop-filter:blur(4px); transition:.2s; }
+    .overlay.hidden { opacity:0; pointer-events:none; }
+    .overlay-card { text-align:center; padding:24px; }
+    .overlay-card strong { display:block; font-size:clamp(25px,7vw,38px); }
+    .overlay-card p { margin:8px 0 16px; color:#a9c3b5; font-size:13px; }
+    button { border:0; color:#052016; font:inherit; font-weight:900; cursor:pointer; }
+    #overlayAction { min-width:138px; padding:12px 20px; border-radius:999px; background:linear-gradient(135deg,var(--lime),var(--mint)); box-shadow:0 8px 28px rgba(46,230,166,.28); }
+    .toolbar { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:9px 12px; border:1px solid rgba(255,255,255,.08); border-radius:15px; background:var(--panel); }
+    .tool-btn { width:40px; height:36px; border-radius:11px; color:#eafff2; background:#19372b; }
+    .speed { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; color:#acc6b8; font-size:11px; font-weight:700; }
+    input[type=range] { width:100%; accent-color:var(--lime); }
+    .pad { width:188px; margin:0 auto; display:grid; grid-template-columns:repeat(3,56px); grid-template-rows:repeat(2,52px); justify-content:center; gap:7px; }
+    .dir { border:1px solid rgba(141,252,104,.18); border-radius:16px; color:#dffff0; background:linear-gradient(145deg,#1b4031,#10271e); box-shadow:inset 0 1px rgba(255,255,255,.06),0 5px 14px rgba(0,0,0,.25); font-size:22px; touch-action:manipulation; }
+    .dir:active { transform:translateY(2px); background:#2a5945; }
+    .up { grid-column:2; } .left { grid-column:1;grid-row:2; } .down { grid-column:2;grid-row:2; } .right { grid-column:3;grid-row:2; }
+    footer { text-align:center; color:#718a7d; font-size:10px; letter-spacing:.04em; }
+    @media (max-height:700px) { .app{gap:7px;width:min(80vh,480px)} .pad{grid-template-rows:repeat(2,44px)} .toolbar{padding-block:6px} footer{display:none} }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div><p class="eyebrow">Pocket arcade</p><h1>霓虹贪吃蛇</h1></div>
+      <div class="score-card"><span>当前分数</span><b id="score">0</b></div>
+    </header>
+
+    <section class="board-wrap" aria-label="游戏区域">
+      <canvas id="board" width="600" height="600"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card"><strong id="status">准备好了吗？</strong><p id="hint">滑动棋盘或点击方向键开始</p><button id="overlayAction">开始游戏</button></div>
+      </div>
+    </section>
+
+    <section class="toolbar">
+      <button class="tool-btn" id="pause" aria-label="暂停或继续">Ⅱ</button>
+      <label class="speed">速度 <input id="speed" type="range" min="2" max="15" value="7" aria-label="移动速度"><b><span id="speedValue">7</span> 格/秒</b></label>
+      <button class="tool-btn" id="restart" aria-label="重新开始">↻</button>
+    </section>
+
+    <nav class="pad" aria-label="触屏方向键">
+      <button class="dir up" data-dir="up" aria-label="向上">▲</button>
+      <button class="dir left" data-dir="left" aria-label="向左">◀</button>
+      <button class="dir down" data-dir="down" aria-label="向下">▼</button>
+      <button class="dir right" data-dir="right" aria-label="向右">▶</button>
+    </nav>
+    <footer>滑动 · 方向键 · WASD　空格键暂停</footer>
+  </main>
+
+  <script>
+    const canvas = document.querySelector('#board');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.querySelector('#score');
+    const overlay = document.querySelector('#overlay');
+    const statusEl = document.querySelector('#status');
+    const hintEl = document.querySelector('#hint');
+    const actionBtn = document.querySelector('#overlayAction');
+    const pauseBtn = document.querySelector('#pause');
+    const speedEl = document.querySelector('#speed');
+    const speedValue = document.querySelector('#speedValue');
+    const N = 24, CELL = canvas.width / N;
+    let snake, food, dir, queued, score, timer, running, paused, dead;
+
+    function reset(showIntro=true) {
+      clearInterval(timer); snake=[{x:12,y:12},{x:11,y:12},{x:10,y:12}]; food={x:17,y:12};
+      dir={x:1,y:0}; queued={...dir}; score=0; running=false; paused=false; dead=false;
+      scoreEl.textContent='0'; pauseBtn.textContent='Ⅱ'; draw();
+      if(showIntro) showOverlay('准备好了吗？','滑动棋盘或点击方向键开始','开始游戏'); else start();
+    }
+    function start() {
+      if(dead) reset(false); if(running&&!paused) return;
+      running=true; paused=false; overlay.classList.add('hidden'); pauseBtn.textContent='Ⅱ'; schedule();
+    }
+    function schedule() { clearInterval(timer); timer=setInterval(tick,1000/Number(speedEl.value)); }
+    function tick() {
+      dir=queued; const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+      const hitWall=head.x<0||head.x>=N||head.y<0||head.y>=N;
+      const eating=head.x===food.x&&head.y===food.y;
+      const body=eating?snake:snake.slice(0,-1);
+      if(hitWall||body.some(p=>p.x===head.x&&p.y===head.y)) return gameOver();
+      snake.unshift(head);
+      if(eating){ score++; scoreEl.textContent=score; placeFood(); if(navigator.vibrate) navigator.vibrate(25); } else snake.pop();
+      draw();
+    }
+    function placeFood(){ do{ food={x:Math.floor(Math.random()*N),y:Math.floor(Math.random()*N)}; }while(snake.some(p=>p.x===food.x&&p.y===food.y)); }
+    function gameOver(){ clearInterval(timer); running=false;dead=true;draw();showOverlay('游戏结束',`得分 ${score} · 再来一局？`,'重新开始'); if(navigator.vibrate) navigator.vibrate([80,40,100]); }
+    function showOverlay(title,hint,action){statusEl.textContent=title;hintEl.textContent=hint;actionBtn.textContent=action;overlay.classList.remove('hidden');}
+    function togglePause(){ if(!running&&!dead) return start(); if(dead) return; paused=!paused; if(paused){clearInterval(timer);showOverlay('已暂停','休息一下，随时继续','继续游戏');pauseBtn.textContent='▶';}else start(); }
+    function setDirection(name){ const dirs={up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}}; const n=dirs[name]; if(n.x!==-dir.x||n.y!==-dir.y) queued=n; if(!running&&!paused) start(); }
+    function draw(){
+      ctx.fillStyle='#06120e';ctx.fillRect(0,0,600,600);ctx.strokeStyle='rgba(104,202,150,.055)';ctx.lineWidth=1;
+      for(let i=1;i<N;i++){const p=i*CELL;ctx.beginPath();ctx.moveTo(p,0);ctx.lineTo(p,600);ctx.stroke();ctx.beginPath();ctx.moveTo(0,p);ctx.lineTo(600,p);ctx.stroke();}
+      const fx=food.x*CELL+CELL/2,fy=food.y*CELL+CELL/2;ctx.shadowColor='#ff5c79';ctx.shadowBlur=18;ctx.fillStyle='#ff5c79';ctx.beginPath();ctx.arc(fx,fy,CELL*.31,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+      snake.forEach((p,i)=>{const pad=i===0?2.6:3.8;ctx.fillStyle=i===0?'#a8ff82':'#38d995';ctx.shadowColor=i===0?'#8dfc68':'transparent';ctx.shadowBlur=i===0?14:0;roundRect(p.x*CELL+pad,p.y*CELL+pad,CELL-pad*2,CELL-pad*2,6);ctx.fill();});ctx.shadowBlur=0;
+      if(snake[0]){ctx.fillStyle='#062116';const h=snake[0];const ex=h.x*CELL+CELL/2+dir.y*5,ey=h.y*CELL+CELL/2+dir.x*5;ctx.beginPath();ctx.arc(ex+dir.x*5,ey-dir.y*5,2.3,0,7);ctx.arc(ex+dir.x*5,ey+dir.y*5,2.3,0,7);ctx.fill();}
+    }
+    function roundRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+    actionBtn.addEventListener('click',start); pauseBtn.addEventListener('click',togglePause); document.querySelector('#restart').addEventListener('click',()=>reset(false));
+    speedEl.addEventListener('input',()=>{speedValue.textContent=speedEl.value;if(running&&!paused)schedule();});
+    document.querySelectorAll('[data-dir]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();setDirection(b.dataset.dir);}));
+    document.addEventListener('keydown',e=>{const m={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right'};if(m[e.key]){e.preventDefault();setDirection(m[e.key]);}if(e.code==='Space'){e.preventDefault();togglePause();}});
+    let touch=null;canvas.addEventListener('pointerdown',e=>touch={x:e.clientX,y:e.clientY});canvas.addEventListener('pointerup',e=>{if(!touch)return;const dx=e.clientX-touch.x,dy=e.clientY-touch.y;touch=null;if(Math.max(Math.abs(dx),Math.abs(dy))<18)return;if(Math.abs(dx)>Math.abs(dy))setDirection(dx>0?'right':'left');else setDirection(dy>0?'down':'up');});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden&&running&&!paused)togglePause();});
+    reset();
+  </script>
+</body>
+</html>
